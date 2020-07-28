@@ -6,11 +6,16 @@ import gradient from '~/assets/temp.jpg';
 
 function Home(props) {
 
+    const openChat = () => {
+        props.navigation.navigate('Chat');
+    }
+
     const menu_options = [
         {
             icon_name: "directions-car",
             title: "Will you travel?",
             description: "check the numbers of dengue cases",
+            action: openChat
         },
         {
             icon_name: "report",
@@ -65,7 +70,10 @@ function Home(props) {
                         {
                         menu_options.map((item, index) => {
                             return(
-                                <TouchableOpacity style={{flexDirection: 'row'}} key={index}>
+                                <TouchableOpacity 
+                                onPress={item.action ? item.action : () => {}} 
+                                style={{flexDirection: 'row'}}
+                                key={index}>
                                     <View style={styles.menu_icon}>
                                         <Icon name={item.icon_name} size={35} color="#999" />
                                     </View>
