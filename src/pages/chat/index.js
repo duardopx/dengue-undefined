@@ -1,27 +1,160 @@
 import React from 'react';
-import { View, Text, TextInput } from 'react-native';
+import { View, Text, TextInput, ScrollView } from 'react-native';
 import { Container, Header } from "./styles";
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { TouchableOpacity } from 'react-native-gesture-handler';
+import { useTranslation } from 'react-i18next';
+import Config from 'react-native-config';
 
-function Chat(){
+let serverUrl = Config.SERVER_URL;
+
+const Message = (props) => {
+    const style = props.fromInput ? styles.myText : styles.waText;
+  
+    return (
+      <View style={styles.messageContainer}>
+        <Text style={style}>{props.text}</Text>
+      </View>
+    );
+};
+
+function Chat(props){
+
+    const { t, i18n } = useTranslation();
+    const [input, setInput] = React.useState('');
+    const [session, setSession] = React.useState('');
+    const [messages, setMessages] = React.useState([]);
+
+    const getSession = () => {
+        return fetch(`${serverUrl}/api/session`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(response.statusText);
+            } else {
+              return response.text();
+            }
+          })
+          .then(sessionId => {
+            setSession(sessionId);
+            return sessionId;
+          })
+      };
+    
+      const fetchMessage = (payload) => {
+        return fetch(`${serverUrl}/api/message`, {
+          method: 'POST',
+          mode: 'no-cors',
+          cache: 'no-cache',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+    
+      const handleMessageResponse = (response) => {
+        if (!response.ok) {
+          throw new Error(response.statusText || response.message || response.status);
+        } else {
+          return response.json().then(response => {
+            addMessages(response.generic);
+          })
+        }
+      }
+    
+      const sendMessage = () => {
+        const payload = {
+          text: input.trim(),
+          sessionid: session
+        };
+    
+        addMessages([{ text: input }], true);
+    
+        setInput('');
+    
+        fetchMessage(payload)
+          .then(handleMessageResponse)
+          .catch(e => {
+            getSession()
+              .then((sessionId) => {
+                return fetchMessage({
+                  text: payload.text,
+                  sessionid: sessionId
+                });
+              })
+              .then(handleMessageResponse)
+              .catch(err => {
+                console.log(err)
+                addMessages([{
+                  text: 'ERROR: Please try again. If the poblem persists contact an administrator.'
+                }]);
+              });
+          });
+      };
+    
+      const addMessages = (messages, fromInput) => {
+        const result = messages.map((r, i) => {
+          return {
+            text: r.text,
+            fromInput: fromInput
+          };
+        });
+    
+        setMessages(msgs => [
+          ...msgs,
+          ...result
+        ]);
+      };
+    
+      React.useEffect(() => {
+        props.navigation.addListener('focus', () => {
+          getSession();
+        })
+      }, []);
+
+    const goback = () => {
+        props.navigation.goBack();
+    }
+
     return(
         <Container>
             <Header>
-                <Icon name={'chevron-left'} size={35} color="rgba(255,255,255,0.54)" />
+                <TouchableOpacity onPress={goback}>
+                    <Icon name={'chevron-left'} size={35} color="rgba(255,255,255,0.54)" />
+                </TouchableOpacity>
                 <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-                    <Text style={styles.text}>Helper Bot</Text>
+                    <Text style={styles.text}>{t('helper_bot')}</Text>
                 </View>
                 <Icon name={'more-vert'} size={35} color="rgba(255,255,255,0.54)" />
             </Header>
-            <View style={{flex: 1, backgroundColor: '#E7E3E3'}}>
-                
-            </View>
+            <ScrollView contentContainerStyle={styles.scrollContainer}>
+                {messages.map((message, i) => {
+                    message.key = `${(new Date()).getTime()}-${i}`;
+                    return <Message {...message} />
+                })}
+            </ScrollView>
             <View style={{backgroundColor: '#D2CFCF', flexDirection: 'row', padding: 2}}>
                 <TextInput 
                 style={styles.textInput}
-                placeholder={'Say something...'}
+                value={input}
+                onChangeText={setInput}
+                onSubmitEditing={sendMessage}
+                returnKeyType='send'
+                enablesReturnKeyAutomatically={true}
+                placeholder={t('say_something')}
+                blurOnSubmit={false}
                 />
-                <Icon name={'send'} size={30} color="#999" style={{marginTop: 8, marginRight: 10}} />
+                <TouchableOpacity 
+                onPress={() => {
+                    if(input.length > 0 )
+                    {
+                        sendMessage();
+                        setInput('');
+                    }
+                }}
+                style={{justifyContent: 'center', padding: 10}}>
+                    <Icon style={{marginTop: 5}} name={'send'} size={30} color={input.length> 0 ? '#333': "#999"} />
+                </TouchableOpacity>
             </View>
         </Container>
     )
@@ -34,7 +167,65 @@ const styles = {
     textInput: {
         paddingLeft: 10,
         flex: 1,
-    }
+    },
+    outerContainer: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#FFF'
+      },
+      innerContainer: {
+        width: '100%',
+        height: '100%'
+      },
+      scrollContainer: {
+        flex: 1,
+        width: '100%',
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
+        paddingHorizontal: 16,
+        paddingBottom: 5,
+        backgroundColor: '#E7E3E3',
+      },
+      messageContainer: {
+        flexDirection: 'column',
+        marginTop: 10,
+        alignItems: 'stretch',
+        justifyContent: 'flex-start'
+      },
+      waText: {
+        fontFamily: 'IBMPlexSans-Medium',
+        backgroundColor: '#D0E2FF',
+        padding: 10,
+        alignSelf: 'flex-start',
+        maxWidth: '85%'
+      },
+      myText: {
+        fontFamily: 'IBMPlexSans-Medium',
+        backgroundColor: '#F1F0EE',
+        padding: 10,
+        alignSelf: 'flex-end',
+        maxWidth: '80%'
+      },
+      inputContainer: {
+        backgroundColor: '#F1F0EE',
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14
+      },
+      textInput: {
+        fontFamily: 'IBMPlexSans-Medium',
+        flex: 1,
+        backgroundColor: '#fff',
+        padding: 16,
+        elevation: 2,
+      },
+      submitButton: {
+        fontFamily: 'IBMPlexSans-Medium',
+        position: 'absolute',
+        right: 24,
+        bottom: 47
+      }
 }
 
 export default Chat;
